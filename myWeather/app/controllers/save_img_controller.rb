@@ -1,0 +1,2 @@
+class SaveImgController < ApplicationController
+end

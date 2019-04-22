@@ -1,0 +1,235 @@
+doctype html
+html
+  head
+    title MyWeather
+    meta charset="utf-8" 
+    meta content=""
+
+  body
+    section#page-container
+      section#page-about.section
+        .site-inner
+          h1.heading.h-01 Weather Now
+          .columns
+            aside
+              h3.heading.h-03 MAIN
+              p.copy-01#main LOADING...
+            aside
+              h3.heading.h-03 TEMPERATURE
+              p.copy-01#temp LOADING...
+            aside
+              h3.heading.h-03 HUMIDITY
+              p.copy-01#humidity LOADING...
+              
+          .columns
+            aside
+              h3.heading.h-03 WIND
+              p.copy-01#wind LOADING...
+            aside
+              h3.heading.h-03 CLOUDS
+              p.copy-01#clouds LOADING...
+            aside
+              h3.heading.h-03 PRESSURE
+              p.copy-01#pressure LOADING... 
+        .image_upload
+          img src = 'https://s3-ap-northeast-1.amazonaws.com/weatherme/901616ef8b.png'  style="height: 30px;"
+        
+      
+      .site-inner
+        h1.heading.h-01 UPLOAD TO AWS
+        input#file-chooser type="file" 
+        button#upload-button Upload
+        p#results
+        
+      = render 'footer'
+
+javascript:
+
+  var credentials = {
+    accessKeyId: 'AKIAJUFR4W36Y2I5W3OA',
+    secretAccessKey: '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'
+  };  //秘钥形式的登录上传
+
+  AWS.config.update(credentials);
+  AWS.config.region = 'ap-northeast-1';   //设置区域
+   
+  // create bucket instance
+  var bucket = new AWS.S3({params: {Bucket: 'weatherme'}});  //选择桶
+  var fileChooser = document.getElementById('file-chooser');
+  var button = document.getElementById('upload-button');
+  var results = document.getElementById('results');
+  
+  button.addEventListener('click', function () {
+    var file = fileChooser.files[0];
+    if (file) {
+      results.innerHTML = '';
+      var params = {Key: file.name, ContentType: file.type, Body: file, 'Access-Control-Allow-Credentials': '*','ACL': 'public-read'}; //key可以设置为桶的相抵路径，Body为文件， ACL最好要设置
+      bucket.upload(params, function (err, data) {
+        console.log(err);  //打印出错误
+        results.innerHTML = err ? 'ERROR!' : 'UPLOADED.';
+      });
+    } else {
+      results.innerHTML = 'Nothing to upload.';
+    }
+  }, false);
+  
+  $.ajax({
+    type: "POST",
+    url: "http://api.openweathermap.org/data/2.5/weather?q=Tokyo&APPID=0ed298a5b072765837f0706af3ba4645&units=metric",
+    dataType: "json",
+    success: function (result, status, xhr) {
+        var temp = result["main"]["temp"];
+        var main = result["weather"][0]["main"];
+        var humidity = result["main"]["humidity"];
+        var wind = result["wind"]["speed"];
+        var clouds = result["clouds"]["all"];
+        var pressure = result["main"]["pressure"];
+        
+        $("#main").text(main);
+        $("#temp").text(temp);
+        $("#humidity").text(humidity);
+        
+        $("#wind").text(wind);
+        $("#clouds").text(clouds);
+        $("#pressure").text(pressure);
+        
+        
+    },
+    error: function (xhr, status, error) {
+        alert("Result: " + status + " " + error + " " + xhr.status + " " + xhr.statusText)
+    }
+  });
+  
+  $('.image_upload').click(function (e) {
+    html2canvas($('.site-inner').get(0),{scale: 2}).then( function (canvas) {
+  
+  
+      var ctx = canvas.getContext("2d");
+      var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  
+      // invert colors
+  
+      var corner = 30*3;
+  
+      var i;
+  
+      var h = imgData.height;
+      var w = imgData.width;
+  
+      var c = h/10;
+  
+  
+      for (i = 0; i < imgData.data.length; i += 4) {
+  
+        var x = (i/4)%w;
+        var y = ((i/4)-x)/w;
+  
+  
+        if ( x <= c && y <= c && (c-x)**2+(c-y)**2 >= c**2){
+          imgData.data[i + 3] = 0;
+        }
+        if ( x >= w-c && y <= c && (x-(w-c))**2+(c-y)**2 >= c**2){
+          imgData.data[i + 3] = 0;
+        }
+        if ( x <= c && y >= h-c && (c-x)**2+(y-(h-c))**2 >= c**2){
+          imgData.data[i + 3] = 0;
+        }  
+        if ( x >= w-c && y >= h-c && (x-(w-c))**2+(y-(h-c))**2 >= c**2){
+          imgData.data[i + 3] = 0;
+        }        
+  
+      }
+  
+      ctx.putImageData(imgData, 0, 0);             
+      var dataUrl = canvas.toDataURL();      
+      const base64ImageData = dataUrl;
+      const contentType = 'image/png';
+  
+      const byteCharacters = atob(base64ImageData.substr(`data:${contentType};base64,`.length));
+      const byteArrays = [];
+  
+      for (let offset = 0; offset < byteCharacters.length; offset += 1024) {
+          const slice = byteCharacters.slice(offset, offset + 1024);
+  
+          const byteNumbers = new Array(slice.length);
+          for (let i = 0; i < slice.length; i++) {
+              byteNumbers[i] = slice.charCodeAt(i);
+          }
+  
+          const byteArray = new Uint8Array(byteNumbers);
+  
+          byteArrays.push(byteArray);
+      }
+      
+      var uploadBlob = base64ToBlob(dataUrl);
+      
+      const blob = new Blob(byteArrays, {type: contentType});
+      const blobUrl = URL.createObjectURL(blob);
+  
+      // window.open(blobUrl, '_blank');  
+      directSendImgS3(uploadBlob);
+  
+    });  
+  }); 
+  
+  
+  function directSendImgS3(uploadBlob) {
+    // window.open(uploadBlob, '_blank');
+    $.ajax({
+      async: false,
+      url: '/uploadimgs',
+      type: 'POST',
+      dataType: 'json',
+      data: {
+        size: uploadBlob.size,
+        content_type: uploadBlob.type
+      }
+    }).done(function (data) {
+      
+        console.log(data)
+        
+        var file = uploadBlob;
+        
+        var url = data.url+'/'+data.form.key;
+        
+        if (file) {
+          results.innerHTML = '';
+          var params = {Key: data.form.key, ContentType: 'image/png', Body: file, 'Access-Control-Allow-Credentials': '*','ACL': 'public-read'}; //key可以设置为桶的相抵路径，Body为文件， ACL最好要设置
+          bucket.upload(params, function (err, data) {
+            if (err) {
+              console.log(err);  //打印出错误
+              return results.innerHTML = err ? 'ERROR!' : 'UPLOADED.';
+            }
+            window.open(url);          
+          });
+        } else {
+          results.innerHTML = 'Nothing to upload.';
+        }
+          
+        
+      
+  
+      
+    }).fail(function (e) {
+      alert("failed!");
+    });
+    
+  }
+  
+  
+  function base64ToBlob(base64) {
+      var base64Data = base64.split(',')[1], // Data URLからBase64のデータ部分のみを取得
+            data = window.atob(base64Data), // base64形式の文字列をデコード
+            buff = new ArrayBuffer(data.length),
+            arr = new Uint8Array(buff),
+            blob,
+            i,
+            dataLen;
+      // blobの生成
+      for (i = 0, dataLen = data.length; i < dataLen; i++) {
+          arr[i] = data.charCodeAt(i);
+      }
+      blob = new Blob([arr], {type: 'image/jpeg'});
+      return blob;
+  }
+   
