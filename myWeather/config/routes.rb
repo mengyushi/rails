@@ -3,7 +3,10 @@ Rails.application.routes.draw do
   get 'weather/index'
   resources :temperature
   resources :uploadimgs
+  
   root 'weather#index'
+  
+  
   
   
   
