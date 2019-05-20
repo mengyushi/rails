@@ -4,6 +4,8 @@ Rails.application.routes.draw do
   resources :temperature
   resources :uploadimgs
   
+  resources :shares,only: [:index,:create, :new]
+  
   root 'weather#index'
   
   

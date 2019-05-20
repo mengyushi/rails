@@ -1,0 +1,18 @@
+<h1>Listing Temperature</h1>
+ 
+<table>
+  <tr>
+    <th>Date</th>
+    <th>Temp</th>
+    <th></th>
+  </tr>
+ 
+  <% @temperature_all.each do |temperature| %>
+    <tr>
+      <td><%= temperature.date %></td>
+      <td><%= temperature.temp %></td>
+      <td><%= link_to 'Show', temperature_path(temperature) %></td>
+      <td><%= link_to 'Edit', edit_temperature_path(temperature) %></td>
+    </tr>
+  <% end %>
+</table>
